@@ -122,6 +122,7 @@ export default function ProductoDetalle() {
   const [perfilLoading, setPerfilLoading] = useState(false)
   const [perfilErr, setPerfilErr] = useState("")
   const [saved, setSaved] = useState(false)
+  const [mostrarModal, setMostrarModal] = useState(false);
 
   // --- NUEVO: conteo de trueques completados en Supabase para el dueño
   const [sbCount, setSbCount] = useState(null)
@@ -282,7 +283,6 @@ export default function ProductoDetalle() {
       : `https://ui-avatars.com/api/?name=${encodeURIComponent(perfil?.nombre_completo || "U")}&background=0d9488&color=fff`)
 
   const nombreUsuario = p.usuario_nombre || perfil?.nombre_completo || "Usuario"
-  const [mostrarModal, setMostrarModal] = useState(false);
 
 
   return (
