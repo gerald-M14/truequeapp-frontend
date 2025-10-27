@@ -1,4 +1,3 @@
-```markdown
 # 🛍️ TruequeApp
 
 **TruequeApp** es una plataforma web de intercambio de productos entre usuarios.  
@@ -9,9 +8,9 @@ Permite publicar, descubrir y **truequear** artículos con chat en tiempo real, 
 ## 📖 Descripción
 
 - Publica productos con fotos, estado, condición y precio estimado (referencial).
-- Descubre por **categorías** y tarjetas estilo marketplace.
-- Propón un **trueque** y conversa por chat en tiempo real (Supabase).
-- Marca trueques como **completados** y registra el historial.
+- Descubre por categorías y tarjetas estilo marketplace.
+- Propón un trueque y conversa por chat en tiempo real (Supabase).
+- Marca trueques como completados y registra el historial.
 - Perfiles con estadísticas: trueques, rating, productos activos.
 
 ---
@@ -26,10 +25,7 @@ Permite publicar, descubrir y **truequear** artículos con chat en tiempo real, 
 
 ---
 
-## 🗂️ Estructura del repositorio (actual)
-
-```
-
+```bash
 TRUEQUEAPPOFICIAL/
 ├── public/
 ├── src/
@@ -49,8 +45,8 @@ TRUEQUEAPPOFICIAL/
 │   │   │   ├── SuggestedSwapCard.jsx
 │   │   │   └── WhyChoose.jsx
 │   │   ├── productos/
-│   │   │   ├── DetalleProducto.jsx        # Vista detalle (ProductoDetalle)
-│   │   │   ├── header_profile.jsx         # Icono/bandeja de conversaciones (popover)
+│   │   │   ├── DetalleProducto.jsx
+│   │   │   ├── header_profile.jsx
 │   │   │   ├── ListaProductos.jsx
 │   │   │   ├── ListarCategorias.jsx
 │   │   │   ├── GoogleButton.jsx
@@ -59,15 +55,15 @@ TRUEQUEAPPOFICIAL/
 │   │   │   ├── profile.jsx
 │   │   │   └── SignupButton.jsx
 │   ├── lib/
-│   │   └── supabase.js                    # Cliente Supabase
+│   │   └── supabase.js
 │   ├── pages/
-│   │   ├── ChatRoom.jsx                   # Chat realtime + botón “Trueque completado”
+│   │   ├── ChatRoom.jsx
 │   │   ├── HomePage.jsx
-│   │   ├── MisChats.jsx                   # Listado de conversaciones
+│   │   ├── MisChats.jsx
 │   │   ├── PerfilEditar.jsx
-│   │   ├── PerfilUsuario.jsx              # Perfil público con métricas
+│   │   ├── PerfilUsuario.jsx
 │   │   ├── ProductoEditar.jsx
-│   │   └── Publicar.jsx                   # Crear publicación
+│   │   └── Publicar.jsx
 │   ├── App.css
 │   ├── App.jsx
 │   ├── index.css
@@ -79,8 +75,7 @@ TRUEQUEAPPOFICIAL/
 ├── vite.config.js
 └── README.md
 
-````
-
+```
 > El backend/API vive en un proyecto Vercel aparte (por límite de rutas), con estructura `api/`:
 >
 > ```
@@ -99,6 +94,9 @@ TRUEQUEAPPOFICIAL/
 >     ├── health.js
 >     └── user-sync.js
 > ```
+
+**REPOSITORIO DEL BACKEND:** [Ver en GitHub](https://github.com/gerald-M14/truequeapp-api-vercel)
+
 
 ---
 
@@ -204,7 +202,8 @@ npm run dev
 * DB: MySQL (Clever Cloud)
 * Auth: Auth0
 
-**Contacto:** [geraldhymessu7@gmail.com](mailto:geraldhymessu7@gmail.com)
+**Contacto:** [truequeapppanama@gmail.com](mailto:truequeapppanama@gmail.com)  
+**Realizado por:** Geraldhy Messú
 
 ---
 
