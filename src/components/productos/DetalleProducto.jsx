@@ -1,11 +1,13 @@
 "use client"
 
-// /src/pages/ProductoDetalle.jsx
+// /src/components/productos/ProductoDetalle.jsx
 import { useEffect, useState, useMemo } from "react"
 import { useParams, useNavigate, Link } from "react-router-dom"
 import { ArrowLeft, Heart, Flag, Star, Package, Calendar, CheckCircle2, Bookmark } from "lucide-react"
 import { useAuth0 } from "@auth0/auth0-react"
 import { supabase } from "../../lib/supabase"
+import ProponerTruequeModal from "../trueque/ProponerTruequeModal"; 
+
 
 const API = "https://truequeapp-api-vercel.vercel.app"
 
@@ -280,6 +282,8 @@ export default function ProductoDetalle() {
       : `https://ui-avatars.com/api/?name=${encodeURIComponent(perfil?.nombre_completo || "U")}&background=0d9488&color=fff`)
 
   const nombreUsuario = p.usuario_nombre || perfil?.nombre_completo || "Usuario"
+  const [mostrarModal, setMostrarModal] = useState(false);
+
 
   return (
     <section className="min-h-screen bg-gradient-to-br from-teal-50 via-white to-emerald-50">
@@ -422,20 +426,31 @@ export default function ProductoDetalle() {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <button
-                  onClick={async () => {
-                    const convId = await proponerTrueque({
-                      productId: p.id_producto,
-                      ownerEmail: ownerEmail || p.usuario_email,
-                      myUser: user,
-                    })
-                    navigate(`/chat/${convId}`)
-                  }}
-                  className="flex-1 h-12 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 text-white font-semibold"
-                >
-                  Proponer Trueque
-                </button>
-              </div>
+                  <button
+                    onClick={() => setMostrarModal(true)} // ✅ abre el modal
+                    className="flex-1 h-12 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 text-white font-semibold"
+                  >
+                    Proponer Trueque
+                  </button>
+                </div>
+
+                {/* ✅ Modal de selección de producto */}
+                {mostrarModal && (
+                  <ProponerTruequeModal
+                    productoObjetivo={p}
+                    onClose={() => setMostrarModal(false)}
+                    onConfirm={async (miProductoSeleccionado) => {
+                      const convId = await proponerTrueque({
+                        productId: p.id_producto,
+                        ownerEmail: ownerEmail || p.usuario_email,
+                        myUser: user,
+                      });
+                      setMostrarModal(false);
+                      navigate(`/chat/${convId}`);
+                    }}
+                  />
+                )}
+
             </div>
           </div>
         </div>
