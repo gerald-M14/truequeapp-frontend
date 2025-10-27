@@ -1,0 +1,4 @@
+@import "tailwindcss";
+/* Ocultar scrollbars en la tira de chips */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
