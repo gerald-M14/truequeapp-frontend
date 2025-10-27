@@ -62,16 +62,36 @@ export default function PerfilEditar() {
         })
 
         // mis productos (endpoint dedicado)
-        setLoadingProductos(true)
-        setProductosMsg("")
-        const rp2 = await fetch(`${API}/api/usuarios/${u.id}/productos?estado=todas`)
+        // mis productos (preferimos 'todas'; si algo falla, unimos activa+intercambiada)
+        setLoadingProductos(true);
+        setProductosMsg("");
 
-        if (!rp2.ok) throw new Error("No se pudo cargar tus productos")
-        const mis = await rp2.json()
-        setMisProductos(Array.isArray(mis) ? mis : [])
-        if (!mis || mis.length === 0) {
-          setProductosMsg("No se encontraron productos por el endpoint dedicado. Probando plan B…")
+        let mis = [];
+        try {
+          const rTodas = await fetch(`${API}/api/usuarios/${u.id}/productos?estado=todas`);
+          if (rTodas.ok) {
+            mis = await rTodas.json();
+          } else {
+            // fallback: unir activa + intercambiada
+            const [rAct, rInt] = await Promise.all([
+              fetch(`${API}/api/usuarios/${u.id}/productos?estado=activa`),
+              fetch(`${API}/api/usuarios/${u.id}/productos?estado=intercambiada`)
+            ]);
+            const act = rAct.ok ? await rAct.json() : [];
+            const inter = rInt.ok ? await rInt.json() : [];
+            const map = new Map();
+            [...act, ...inter].forEach(p => map.set(p.id_producto, p));
+            mis = Array.from(map.values());
+          }
+        } catch (e) {
+          console.warn('Error cargando productos (todas/merge):', e);
         }
+
+        setMisProductos(Array.isArray(mis) ? mis : []);
+        if (!mis || mis.length === 0) {
+          setProductosMsg("No se encontraron productos por el endpoint dedicado. Probando plan B…");
+        }
+
       } catch (e) {
         setMsg(e.message)
       } finally {
@@ -422,6 +442,9 @@ export default function PerfilEditar() {
 
                   <div className="p-5">
                     <h3 className="font-bold text-slate-900 text-lg mb-2 line-clamp-1">{p.titulo}</h3>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full border bg-slate-50 text-slate-600">
+                      {p.estado_publicacion}
+                    </span>
                     <p className="text-sm text-slate-600 line-clamp-2 mb-4">{p.descripcion}</p>
 
                     <div className="flex items-center gap-3">

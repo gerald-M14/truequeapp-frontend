@@ -3,33 +3,73 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { supabase } from "../lib/supabase";
+const API = import.meta.env.VITE_API || "https://truequeapp-api-vercel.vercel.app";
+
+async function getProductOwnerEmail(productId) {
+  if (!productId) return null;
+  try {
+    const r = await fetch(`${API}/api/productos/${productId}`);
+    if (!r.ok) return null;
+    const json = await r.json();
+    return json?.producto?.usuario_email || null;
+  } catch {
+    return null;
+  }
+}
+
+async function marcarIntercambiada(productId, userEmail) {
+  if (!productId) return;
+  try {
+    await fetch(`${API}/api/productos/${productId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "x-user-email": userEmail, // el backend valida que seas el dueño
+      },
+      body: JSON.stringify({ estado_publicacion: "intercambiada" }),
+    });
+  } catch (e) {
+    console.warn("PUT intercambiada falló", productId, e);
+  }
+}
+
+
 
 export default function ChatRoom() {
   const { id } = useParams(); // conversation id
   const { user, isAuthenticated, loginWithRedirect } = useAuth0();
 
   const [conv, setConv] = useState(null);
+  const [productos, setProductos] = useState([]);
   const [msgs, setMsgs] = useState([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const [updatingDeal, setUpdatingDeal] = useState(false);
   const bottomRef = useRef(null);
 
-  // cargar conversación + mensajes + realtime
-  useEffect(() => {
+ useEffect(() => {
     if (!isAuthenticated) { loginWithRedirect(); return; }
     let sub;
 
     (async () => {
-      // conversación
       const { data: convRow } = await supabase
         .from("conversations")
         .select("*")
         .eq("id", id)
         .maybeSingle();
       setConv(convRow || null);
+      if (convRow?.product_id || convRow?.offer_product_id) {
+        const ids = [convRow.product_id, convRow.offer_product_id].filter(Boolean);
+        const data = await Promise.all(ids.map(async (idp) => {
+          const r = await fetch(`${API}/api/productos/${idp}`);
+          if (!r.ok) return null;
+          const json = await r.json();
+          return json?.producto || null;
+        }));
+        setProductos(data.filter(Boolean));
+      }
 
-      // mensajes iniciales
+
       const { data } = await supabase
         .from("messages")
         .select("*")
@@ -37,7 +77,6 @@ export default function ChatRoom() {
         .order("created_at", { ascending: true });
       setMsgs(data || []);
 
-      // realtime mensajes
       sub = supabase
         .channel(`messages_conv_${id}`)
         .on(
@@ -56,9 +95,22 @@ export default function ChatRoom() {
     return () => { sub && sub.unsubscribe(); };
   }, [id, isAuthenticated, loginWithRedirect]);
 
+  // 2) Mantener el scroll al fondo
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs.length]);
+
+  // 3) Reaccionar cuando la conversación pase a COMPLETED (marcar solo TU producto)
+  useEffect(() => {
+    if (!conv || conv.deal_state !== "completed" || !user?.email) return;
+    (async () => {
+      const ids = [conv.product_id, conv.offer_product_id].filter(Boolean);
+      const owners = await Promise.all(ids.map(getProductOwnerEmail));
+      const mine = ids.filter((pid, i) => owners[i] === user.email);
+      await Promise.allSettled(mine.map((pid) => marcarIntercambiada(pid, user.email)));
+    })();
+  }, [conv?.deal_state, conv?.product_id, conv?.offer_product_id, user?.email]);
+  
 
   const send = async () => {
     const body = text.trim();
@@ -118,62 +170,78 @@ export default function ChatRoom() {
   }, [msgs]);
 
   // confirmar / deshacer confirmación
-  const toggleDealConfirmation = async () => {
-    if (!conv || updatingDeal) return;
-    try {
-      setUpdatingDeal(true);
+  // confirmar / deshacer confirmación
+const toggleDealConfirmation = async () => {
+  if (!conv || updatingDeal) return;
+  try {
+    setUpdatingDeal(true);
 
-      const current = Array.isArray(conv.deal_confirmations) ? conv.deal_confirmations : [];
-      const next = new Set(current);
-      if (myConfirmed) next.delete(user.email);
-      else next.add(user.email);
+    const current = Array.isArray(conv.deal_confirmations) ? conv.deal_confirmations : [];
+    const next = new Set(current);
+    if (myConfirmed) next.delete(user.email); else next.add(user.email);
 
-      const arr = Array.from(next);
-      const nextState =
-        arr.length === 0 ? "none" :
-        arr.length === 1 ? "pending" :
-        "completed";
+    const arr = Array.from(next);
+    const nextState = arr.length === 0 ? "none" : arr.length === 1 ? "pending" : "completed";
 
-      const payload = {
-        deal_confirmations: arr,
-        deal_state: nextState,
-        deal_completed_at: nextState === "completed" ? new Date().toISOString() : null
-      };
+    const payload = {
+      deal_confirmations: arr,
+      deal_state: nextState,
+      deal_completed_at: nextState === "completed" ? new Date().toISOString() : null,
+    };
 
-      const { data: updated, error } = await supabase
-        .from("conversations")
-        .update(payload)
-        .eq("id", conv.id)
-        .select()
-        .single();
-      if (error) throw error;
-      setConv(updated);
+    const { data: updated, error } = await supabase
+      .from("conversations")
+      .update(payload)
+      .eq("id", conv.id)
+      .select()
+      .single();
+    if (error) throw error;
+    setConv(updated);
 
-      // mensaje de sistema
-      const systemText =
-        nextState === "completed"
-          ? "✅ Trueque marcado como COMPLETADO por ambas partes."
-          : myConfirmed
-            ? "❎ Has retirado tu confirmación de trueque."
-            : "⏳ Confirmación registrada. Esperando a la otra parte.";
-      await supabase.from("messages").insert({
-        conversation_id: Number(id),
-        sender_email: "system@truequeapp",
-        sender_name: "Sistema",
-        sender_avatar: "",
-        body: systemText
-      });
+    const systemText =
+      nextState === "completed"
+        ? "✅ Trueque marcado como COMPLETADO por ambas partes."
+        : myConfirmed
+        ? "❎ Has retirado tu confirmación de trueque."
+        : "⏳ Confirmación registrada. Esperando a la otra parte.";
 
-      // opcional: actualizar last_message
-      await supabase
-        .from("conversations")
-        .update({ last_message: systemText, last_message_at: new Date().toISOString() })
-        .eq("id", id);
+    await supabase.from("messages").insert({
+      conversation_id: Number(id),
+      sender_email: "system@truequeapp",
+      sender_name: "Sistema",
+      sender_avatar: "",
+      body: systemText,
+    });
 
-    } finally {
-      setUpdatingDeal(false);
+    await supabase
+      .from("conversations")
+      .update({ last_message: systemText, last_message_at: new Date().toISOString() })
+      .eq("id", id);
+
+    // ✅ Si quedó COMPLETED, marca SOLO tu producto como 'intercambiada'
+    if (nextState === "completed") {
+      const targetId = updated?.product_id ?? conv?.product_id;
+      const offerId  = updated?.offer_product_id ?? conv?.offer_product_id;
+
+      const [ownerTarget, ownerOffer] = await Promise.all([
+        getProductOwnerEmail(targetId),
+        getProductOwnerEmail(offerId),
+      ]);
+
+      const mine = [];
+      if (ownerTarget && ownerTarget === user.email) mine.push(targetId);
+      if (ownerOffer  && ownerOffer  === user.email) mine.push(offerId);
+
+      await Promise.allSettled(mine.map((idp) => marcarIntercambiada(idp, user.email)));
     }
-  };
+  } catch (e) {
+    console.error("Error al confirmar trueque:", e);
+  } finally {
+    setUpdatingDeal(false);
+  }
+};
+
+
 
   // UI
   return (
@@ -242,6 +310,32 @@ export default function ChatRoom() {
       <main className="mx-auto max-w-4xl px-4">
         <div className="mt-4 mb-36 rounded-3xl border border-slate-200 bg-white shadow-sm">
           <div className="h-[62vh] md:h-[68vh] overflow-y-auto p-4 md:p-6">
+            {/* Productos a intercambiar */}
+            {productos.length > 0 && (
+              <div className="mb-6 grid sm:grid-cols-2 gap-4">
+                {productos.map((p) => (
+                  <div
+                    key={p.id_producto}
+                    className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md transition"
+                  >
+                    <img
+                      src={p.imagen_principal || p.imagen_url || "/placeholder.png"}
+                      alt={p.titulo}
+                      className="h-40 w-full object-cover"
+                    />
+                    
+                    <div className="p-3">
+                      <h3 className="font-semibold text-slate-800 line-clamp-1">{p.titulo}</h3>
+                      <p className="text-sm text-slate-500 line-clamp-2">{p.descripcion}</p>
+                      <div className="mt-2 text-xs text-slate-500">
+                        Estado: <span className="font-medium text-slate-700">{p.estado_publicacion}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {Object.keys(byDay).length === 0 && (
               <div className="h-full grid place-items-center text-center text-slate-500">
                 <div>

@@ -53,34 +53,40 @@ function getCategoria(p, data) {
 }
 
 // crear o reutilizar conversación para trueque
-async function proponerTrueque({ productId, ownerEmail, myUser }) {
+async function proponerTrueque({ productId, ownerEmail, myUser, offerProductId }) {
   const { data: exists } = await supabase
     .from("conversations")
     .select("*")
     .eq("product_id", productId)
     .contains("participants", [myUser.email, ownerEmail])
-    .maybeSingle()
+    .maybeSingle();
 
-  let convId
+  let convId;
   if (exists) {
-    convId = exists.id
+    convId = exists.id;
+    // si no tiene offer_product_id aún, lo actualizamos
+    if (!exists.offer_product_id && offerProductId) {
+      await supabase.from("conversations")
+        .update({ offer_product_id: offerProductId })
+        .eq("id", convId);
+    }
   } else {
     const { data: created, error } = await supabase
       .from("conversations")
       .insert({
         product_id: productId,
+        offer_product_id: offerProductId,            // ✅ guardamos el mío
         title: `Trueque por producto #${productId}`,
         participants: [myUser.email, ownerEmail],
         last_message: "¡Hola! Me interesa hacer un trueque por tu producto.",
         last_message_at: new Date().toISOString(),
-        // opcional si quieres inicializar explícitamente
         deal_state: "none",
         deal_confirmations: [],
       })
       .select()
-      .single()
-    if (error) throw error
-    convId = created.id
+      .single();
+    if (error) throw error;
+    convId = created.id;
 
     await supabase.from("messages").insert({
       conversation_id: convId,
@@ -88,10 +94,11 @@ async function proponerTrueque({ productId, ownerEmail, myUser }) {
       sender_name: myUser.name,
       sender_avatar: myUser.picture,
       body: "¡Hola! Me interesa hacer un trueque por tu producto.",
-    })
+    });
   }
-  return convId
+  return convId;
 }
+
 
 // badge de confianza
 function TrustBadge({ nivel }) {
@@ -444,6 +451,7 @@ export default function ProductoDetalle() {
                         productId: p.id_producto,
                         ownerEmail: ownerEmail || p.usuario_email,
                         myUser: user,
+                        offerProductId: miProductoSeleccionado?.id_producto, // ✅ clave
                       });
                       setMostrarModal(false);
                       navigate(`/chat/${convId}`);
