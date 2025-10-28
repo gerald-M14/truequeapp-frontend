@@ -45,9 +45,10 @@ export default function PerfilUsuario() {
         setErr("")
 
         const [rp, rprods] = await Promise.all([
-          fetch(`${API}/api/usuarios/${id}/perfil`),
-          fetch(`${API}/api/usuarios/${id}/productos`),
+          fetch(`${API}/api/usuarios/${id}/perfil`, { cache: 'no-store' }),
+          fetch(`${API}/api/usuarios/${id}/productos`, { cache: 'no-store' }),
         ])
+
         if (!rp.ok) throw new Error("Perfil no disponible")
         const prof = await rp.json()
 
@@ -75,7 +76,12 @@ export default function PerfilUsuario() {
         }
 
         setPerfil(prof)
-        setProductos(Array.isArray(prods) ? prods : [])
+        // ✅ mostrar solo activos en perfil público
+        const activos = (Array.isArray(prods) ? prods : []).filter(p =>
+          ["activa", "activo"].includes(String(p?.estado_publicacion || "").toLowerCase())
+        )
+        setProductos(activos)
+
       } catch (e) {
         setErr(e.message)
       } finally {
@@ -282,7 +288,7 @@ export default function PerfilUsuario() {
                 <Link to={`/producto/${prod.id_producto}`} className="block">
                   <div className="aspect-[4/3] bg-gradient-to-br from-slate-100 to-slate-200 flex items-center justify-center overflow-hidden">
                     <img
-                      src={prod.imagen_url || "/placeholder.png"}
+                      src={prod.imagen_url || prod.imagen_principal || "/placeholder.png"}
                       alt={prod.titulo}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                       onError={(e) => {
