@@ -312,14 +312,14 @@ export default function ProductoDetalle() {
                 </span>
               )}
 
-              <button
+              {/* <button
                 onClick={() => setSaved(!saved)}
                 className="absolute z-10 top-6 right-6 p-3 bg-white/95 backdrop-blur-sm rounded-full border border-gray-200 shadow-lg hover:bg-white transition-all duration-200 hover:scale-110"
               >
                 <Bookmark
                   className={`w-5 h-5 transition-colors ${saved ? "fill-teal-600 text-teal-600" : "text-gray-600"}`}
                 />
-              </button>
+              </button> */}
 
               <div className="relative w-full bg-gradient-to-br from-gray-50 to-white flex items-center justify-center p-8 sm:p-12">
                 <img

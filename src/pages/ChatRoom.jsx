@@ -33,7 +33,16 @@ async function marcarIntercambiada(productId, userEmail) {
   }
 }
 
+// ✅ NUEVO: marca ambos productos basándose en sus dueños reales
+async function marcarAmbosProductos(productIdA, productIdB) {
+  const ids = [productIdA, productIdB].filter(Boolean);
+  if (ids.length === 0) return;
 
+  const owners = await Promise.all(ids.map(getProductOwnerEmail));
+  await Promise.allSettled(
+    ids.map((pid, i) => owners[i] ? marcarIntercambiada(pid, owners[i]) : Promise.resolve())
+  );
+}
 
 export default function ChatRoom() {
   const { id } = useParams(); // conversation id
@@ -47,7 +56,7 @@ export default function ChatRoom() {
   const [updatingDeal, setUpdatingDeal] = useState(false);
   const bottomRef = useRef(null);
 
- useEffect(() => {
+  useEffect(() => {
     if (!isAuthenticated) { loginWithRedirect(); return; }
     let sub;
 
@@ -58,6 +67,7 @@ export default function ChatRoom() {
         .eq("id", id)
         .maybeSingle();
       setConv(convRow || null);
+
       if (convRow?.product_id || convRow?.offer_product_id) {
         const ids = [convRow.product_id, convRow.offer_product_id].filter(Boolean);
         const data = await Promise.all(ids.map(async (idp) => {
@@ -68,7 +78,6 @@ export default function ChatRoom() {
         }));
         setProductos(data.filter(Boolean));
       }
-
 
       const { data } = await supabase
         .from("messages")
@@ -95,22 +104,30 @@ export default function ChatRoom() {
     return () => { sub && sub.unsubscribe(); };
   }, [id, isAuthenticated, loginWithRedirect]);
 
-  // 2) Mantener el scroll al fondo
+  // Mantener el scroll al fondo
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs.length]);
 
-  // 3) Reaccionar cuando la conversación pase a COMPLETED (marcar solo TU producto)
+  // ✅ CAMBIO: cuando la conversación quede COMPLETED, marcar AMBOS productos
   useEffect(() => {
-    if (!conv || conv.deal_state !== "completed" || !user?.email) return;
+    if (!conv || conv.deal_state !== "completed") return;
     (async () => {
-      const ids = [conv.product_id, conv.offer_product_id].filter(Boolean);
-      const owners = await Promise.all(ids.map(getProductOwnerEmail));
-      const mine = ids.filter((pid, i) => owners[i] === user.email);
-      await Promise.allSettled(mine.map((pid) => marcarIntercambiada(pid, user.email)));
+      await marcarAmbosProductos(conv.product_id, conv.offer_product_id);
+
+      // refrescar fichas para reflejar estado "intercambiada"
+      try {
+        const ids = [conv.product_id, conv.offer_product_id].filter(Boolean);
+        const data = await Promise.all(ids.map(async (idp) => {
+          const r = await fetch(`${API}/api/productos/${idp}`);
+          if (!r.ok) return null;
+          const json = await r.json();
+          return json?.producto || null;
+        }));
+        setProductos(data.filter(Boolean));
+      } catch {}
     })();
-  }, [conv?.deal_state, conv?.product_id, conv?.offer_product_id, user?.email]);
-  
+  }, [conv?.deal_state, conv?.product_id, conv?.offer_product_id]);
 
   const send = async () => {
     const body = text.trim();
@@ -141,7 +158,6 @@ export default function ChatRoom() {
     }
   };
 
-  // util
   const formatTime = (iso) =>
     new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
@@ -158,7 +174,6 @@ export default function ChatRoom() {
   const confirmationsCount = conv?.deal_confirmations?.length || 0;
   const dealState = conv?.deal_state || "none"; // 'none' | 'pending' | 'completed'
 
-  // agrupar por día (como tenías)
   const byDay = useMemo(() => {
     const groups = {};
     for (const m of msgs) {
@@ -169,79 +184,82 @@ export default function ChatRoom() {
     return groups;
   }, [msgs]);
 
-  // confirmar / deshacer confirmación
-  // confirmar / deshacer confirmación
-const toggleDealConfirmation = async () => {
-  if (!conv || updatingDeal) return;
-  try {
-    setUpdatingDeal(true);
+  // Confirmar / deshacer confirmación
+  const toggleDealConfirmation = async () => {
+    if (!conv || updatingDeal) return;
+    try {
+      setUpdatingDeal(true);
 
-    const current = Array.isArray(conv.deal_confirmations) ? conv.deal_confirmations : [];
-    const next = new Set(current);
-    if (myConfirmed) next.delete(user.email); else next.add(user.email);
+      const current = Array.isArray(conv.deal_confirmations) ? conv.deal_confirmations : [];
+      const next = new Set(current);
+      if (myConfirmed) next.delete(user.email); else next.add(user.email);
 
-    const arr = Array.from(next);
-    const nextState = arr.length === 0 ? "none" : arr.length === 1 ? "pending" : "completed";
+      const arr = Array.from(next);
+      const nextState = arr.length === 0 ? "none" : arr.length === 1 ? "pending" : "completed";
 
-    const payload = {
-      deal_confirmations: arr,
-      deal_state: nextState,
-      deal_completed_at: nextState === "completed" ? new Date().toISOString() : null,
-    };
+      const payload = {
+        deal_confirmations: arr,
+        deal_state: nextState,
+        deal_completed_at: nextState === "completed" ? new Date().toISOString() : null,
+      };
 
-    const { data: updated, error } = await supabase
-      .from("conversations")
-      .update(payload)
-      .eq("id", conv.id)
-      .select()
-      .single();
-    if (error) throw error;
-    setConv(updated);
+      const { data: updated, error } = await supabase
+        .from("conversations")
+        .update(payload)
+        .eq("id", conv.id)
+        .select()
+        .single();
+      if (error) throw error;
+      setConv(updated);
 
-    const systemText =
-      nextState === "completed"
-        ? "✅ Trueque marcado como COMPLETADO por ambas partes."
-        : myConfirmed
-        ? "❎ Has retirado tu confirmación de trueque."
-        : "⏳ Confirmación registrada. Esperando a la otra parte.";
+      const systemText =
+        nextState === "completed"
+          ? "✅ Trueque marcado como COMPLETADO por ambas partes."
+          : myConfirmed
+          ? "❎ Has retirado tu confirmación de trueque."
+          : "⏳ Confirmación registrada. Esperando a la otra parte.";
 
-    await supabase.from("messages").insert({
-      conversation_id: Number(id),
-      sender_email: "system@truequeapp",
-      sender_name: "Sistema",
-      sender_avatar: "",
-      body: systemText,
-    });
+      await supabase.from("messages").insert({
+        conversation_id: Number(id),
+        sender_email: "system@truequeapp",
+        sender_name: "Sistema",
+        sender_avatar: "",
+        body: systemText,
+      });
 
-    await supabase
-      .from("conversations")
-      .update({ last_message: systemText, last_message_at: new Date().toISOString() })
-      .eq("id", id);
+      await supabase
+        .from("conversations")
+        .update({ last_message: systemText, last_message_at: new Date().toISOString() })
+        .eq("id", id);
 
-    // ✅ Si quedó COMPLETED, marca SOLO tu producto como 'intercambiada'
-    if (nextState === "completed") {
-      const targetId = updated?.product_id ?? conv?.product_id;
-      const offerId  = updated?.offer_product_id ?? conv?.offer_product_id;
+      // ✅ SI QUEDÓ COMPLETED: marca AMBOS productos
+      if (nextState === "completed") {
+        await marcarAmbosProductos(
+          updated?.product_id ?? conv?.product_id,
+          updated?.offer_product_id ?? conv?.offer_product_id
+        );
 
-      const [ownerTarget, ownerOffer] = await Promise.all([
-        getProductOwnerEmail(targetId),
-        getProductOwnerEmail(offerId),
-      ]);
-
-      const mine = [];
-      if (ownerTarget && ownerTarget === user.email) mine.push(targetId);
-      if (ownerOffer  && ownerOffer  === user.email) mine.push(offerId);
-
-      await Promise.allSettled(mine.map((idp) => marcarIntercambiada(idp, user.email)));
+        // refrescar fichas de productos
+        try {
+          const ids = [
+            updated?.product_id ?? conv?.product_id,
+            updated?.offer_product_id ?? conv?.offer_product_id
+          ].filter(Boolean);
+          const data = await Promise.all(ids.map(async (idp) => {
+            const r = await fetch(`${API}/api/productos/${idp}`);
+            if (!r.ok) return null;
+            const json = await r.json();
+            return json?.producto || null;
+          }));
+          setProductos(data.filter(Boolean));
+        } catch {}
+      }
+    } catch (e) {
+      console.error("Error al confirmar trueque:", e);
+    } finally {
+      setUpdatingDeal(false);
     }
-  } catch (e) {
-    console.error("Error al confirmar trueque:", e);
-  } finally {
-    setUpdatingDeal(false);
-  }
-};
-
-
+  };
 
   // UI
   return (
@@ -323,7 +341,6 @@ const toggleDealConfirmation = async () => {
                       alt={p.titulo}
                       className="h-40 w-full object-cover"
                     />
-                    
                     <div className="p-3">
                       <h3 className="font-semibold text-slate-800 line-clamp-1">{p.titulo}</h3>
                       <p className="text-sm text-slate-500 line-clamp-2">{p.descripcion}</p>

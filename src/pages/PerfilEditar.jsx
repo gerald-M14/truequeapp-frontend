@@ -151,12 +151,12 @@ export default function PerfilEditar() {
 
         setMisProductos(mine)
         if (mine.length === 0) {
-          setProductosMsg("Plan B ejecutado pero no se hallaron productos que pertenezcan al usuario.")
+          setProductosMsg("No se encontraron productos")
         } else {
           setProductosMsg("")
         }
       } catch (e) {
-        setProductosMsg(e.message || "Error en el plan B de productos")
+        setProductosMsg(e.message || "Error")
       } finally {
         setLoadingProductos(false)
       }
