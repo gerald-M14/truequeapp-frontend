@@ -367,9 +367,9 @@ export default function Publicar() {
               </div>
 
               {/* Ayuda */}
-              <p className="mt-2 text-xs text-slate-500">
+              {/* <p className="mt-2 text-xs text-slate-500">
                 Si falta alguna categoría, se puede crear desde el panel de administración.
-              </p>
+              </p> */}
             </div>
 
             {/* Imagen Upload / Dropzone */}
