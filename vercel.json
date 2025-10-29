@@ -1,0 +1,10 @@
+{
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
+    {
+      "source": "/((?!assets/|favicon\\.ico|robots\\.txt|manifest\\.webmanifest|site\\.webmanifest|.*\\.(js|css|png|jpg|jpeg|gif|svg|webp|ico|txt|json|map)).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
